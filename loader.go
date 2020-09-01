@@ -7,5 +7,5 @@ package lcache
 type Loader interface {
 
 	// This will be called by the library at the point when a value needs to be loaded/reloaded from cache.
-	Load(key string) interface{}
+	Load(key string) (interface{}, error)
 }

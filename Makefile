@@ -1,9 +1,10 @@
-default: test
+default: containerized_build
 
 LCACHE_VERSION ?= 1.0
 
 export GOPATH=$(CURDIR)/
-export GOBIN=$(CURDIR)/.temp/
+export GOBIN=$(CURDIR)/.output/bin
+export GOCACHE=$(CURDIR)/.output/cache
 export LCACHE_VERSION
 
 clean:
@@ -29,3 +30,13 @@ vendor:
 
 test:
 	@go test .
+
+containerized_build:
+	docker run \
+		--rm \
+		-v "$(CURDIR)":"/srv/build":rw \
+		-u "$(shell id -u $(whoami)):$(shell id -g $(whoami))" \
+		-e LCACHE_VERSION=$(LCACHE_VERSION) \
+		golang:1.14 \
+		bash -c \
+		"cd /srv/build; make test"

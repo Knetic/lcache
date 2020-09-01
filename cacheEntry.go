@@ -15,10 +15,10 @@ type cacheEntry struct {
 	refreshError error
 }
 
-func (this *cacheEntry) updateTimestamps(expireAfterRead time.Time) {
+func (this *cacheEntry) updateTimestamps(expireAfter time.Duration) {
 
 	this.lastUsed = time.Now()
-	if this.ExpireAfterRead > 0 {
-		this.expiration = this.lastUsed + expireAfterRead
+	if expireAfter > 0 {
+		this.expiration = this.lastUsed.Add(expireAfter)
 	}
 }
