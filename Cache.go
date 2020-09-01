@@ -35,10 +35,16 @@ func NewCache(params Params) (*Cache, error) {
 		refreshes = make(chan string, 32)
 	}
 
-	return &Cache {
+	ret := &Cache {
 		Params: params,
 		refreshes: refreshes,
-	}, nil
+	}
+	
+	if params.GracefulRefresh {
+		go RunRefresh(ret)
+	}
+	
+	return ret, nil
 }
 
 func (this *Cache) Get(key string) (interface{}, error) {
@@ -94,10 +100,9 @@ func (this *Cache) Get(key string) (interface{}, error) {
 }
 
 /*
+	goroutine.
 	Waits for cache entries to be flagged as expired, and reloads them using the Loader.
-
-	This blocks infinitely, so is intended to be a goroutine.
-	If your application needs more than one, it is safe to have multiple goroutines running this function.
+	By default, every Cache starts one of these goroutines for themselves, only call again if you need multiple refreshers (it's safe).
 */
 func RunRefresh(cache *Cache) error {
 	
@@ -136,4 +141,9 @@ func (this *Cache) removeLRU() {
 	}
 
 	delete(this.entries, lruKey)
+}
+
+// Stops all refreshing on this cache.
+func (this *Cache) StopRefresh() {
+	close(this.refreshes)
 }
