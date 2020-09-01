@@ -43,7 +43,7 @@ func NewCache(params Params) (*Cache, error) {
 	if params.GracefulRefresh {
 		go RunRefresh(ret)
 	}
-	
+
 	return ret, nil
 }
 
@@ -136,6 +136,7 @@ func (this *Cache) removeLRU() {
 
 	for k, v := range this.entries {
 		if lastUsed.After(v.lastUsed) {
+			lastUsed = v.lastUsed
 			lruKey = k
 		}
 	}
