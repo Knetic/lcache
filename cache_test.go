@@ -16,7 +16,7 @@ var (
 func TestGet(t *testing.T) {
 	data := make(map[string]int, 0)
 	params := Params{
-		Loader:             &staticLoader{data: &data},
+		Loader:             &staticLoader{data: data},
 		MaximumEntries:     10,
 		ExpireAfterWrite:   100 * time.Millisecond,
 		ExpireAfterRead:    100 * time.Millisecond,
@@ -68,11 +68,11 @@ func ensureInCache(t *testing.T, cache Cache, key string, val interface{}) {
 }
 
 type staticLoader struct {
-	data *map[string]int
+	data map[string]int
 }
 
 func (loader *staticLoader) Load(key string) (interface{}, error) {
-	if num, exists := (*loader.data)[key]; !exists {
+	if num, exists := loader.data[key]; !exists {
 		println(fmt.Sprintf("nothing to load for [%s]", key))
 		return nil, nil
 	} else {
