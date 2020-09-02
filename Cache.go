@@ -11,6 +11,9 @@ type Params struct {
 	MaximumEntries uint32
 	ExpireAfterWrite time.Duration
 	ExpireAfterRead time.Duration
+	
+	EvictionPoolSize uint32
+	EvictionSampleSize uint32
 
 	GracefulRefresh bool
 }
@@ -21,6 +24,9 @@ type Cache struct {
 
 	entries map[string]*cacheEntry
 	refreshes chan string
+
+	evictionPool []evictableEntry
+	evictionPoolTop int
 }
 
 func NewCache(params Params) (*Cache, error) {
@@ -31,6 +37,16 @@ func NewCache(params Params) (*Cache, error) {
 		params.MaximumEntries = 4096
 	}
 
+	// min 8; too small and it doesn't make any sense anyway.
+	if params.EvictionPoolSize <= 8 {
+		params.EvictionPoolSize = 8
+	}
+
+	// no sense in sampling more than we can fit in the pool
+	if params.EvictionPoolSize < params.EvictionSampleSize {
+		params.EvictionPoolSize = params.EvictionSampleSize
+	}
+
 	if params.GracefulRefresh {
 		refreshes = make(chan string, 32)
 	}
@@ -38,6 +54,7 @@ func NewCache(params Params) (*Cache, error) {
 	ret := &Cache {
 		Params: params,
 		refreshes: refreshes,
+		evictionPool: make([]evictableEntry, params.EvictionPoolSize),
 	}
 	
 	if params.GracefulRefresh {
@@ -126,22 +143,6 @@ func RunRefresh(cache *Cache) error {
 	}
 
 	return nil
-}
-
-// Removes the least-recently-used entry.
-func (this *Cache) removeLRU() {
-
-	var lruKey string
-	var lastUsed time.Time
-
-	for k, v := range this.entries {
-		if lastUsed.After(v.lastUsed) {
-			lastUsed = v.lastUsed
-			lruKey = k
-		}
-	}
-
-	delete(this.entries, lruKey)
 }
 
 // Stops all refreshing on this cache.
