@@ -18,7 +18,7 @@ func TestGet(t *testing.T) {
 	params := Params{
 		Loader:             &staticLoader{data: &data},
 		MaximumEntries:     10,
-		ExpireAfterWrite:   1 * time.Second,
+		ExpireAfterWrite:   100 * time.Millisecond,
 		ExpireAfterRead:    100 * time.Millisecond,
 		EvictionPoolSize:   32,
 		EvictionSampleSize: 32,
@@ -72,7 +72,6 @@ type staticLoader struct {
 }
 
 func (loader *staticLoader) Load(key string) (interface{}, error) {
-	println(fmt.Sprintf("%v", loader.data))
 	if num, exists := (*loader.data)[key]; !exists {
 		println(fmt.Sprintf("nothing to load for [%s]", key))
 		return nil, nil
