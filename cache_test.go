@@ -2,21 +2,23 @@ package lcache
 
 import (
 	"fmt"
+	"math/rand"
 	"runtime/debug"
 	"testing"
 	"time"
 )
 
 var (
-	key1 = "key1"
-	key2 = "key2"
-	key3 = "key3"
+	key1   = "key1"
+	key2   = "key2"
+	key3   = "key3"
+	keySet = []string{key1, key2, key3}
 )
 
 func TestGet(t *testing.T) {
 	data := make(map[string]int, 0)
 	params := Params{
-		Loader:             &staticLoader{data: data},
+		Loader:             &staticLoader{data: &data},
 		MaximumEntries:     10,
 		ExpireAfterWrite:   100 * time.Millisecond,
 		ExpireAfterRead:    100 * time.Millisecond,
@@ -55,6 +57,46 @@ func TestGet(t *testing.T) {
 	ensureNotInCache(t, cache, key3)
 }
 
+func TestGetSetRaceCondition(t *testing.T) {
+	data := make(map[string]int, len(keySet))
+	params := Params{
+		Loader:             &staticLoader{data: &data},
+		MaximumEntries:     10,
+		ExpireAfterWrite:   1 * time.Microsecond,
+		ExpireAfterRead:    1 * time.Microsecond,
+		EvictionPoolSize:   32,
+		EvictionSampleSize: 32,
+		GracefulRefresh:    false, // rule out refresh goroutine
+	}
+	cache, _ := NewCache(params)
+
+	// spam Get
+	go func() {
+		for {
+			for _, key := range keySet {
+				_, err := cache.Get(key)
+				if err != nil {
+					t.Error(err.Error())
+				}
+			}
+		}
+	}()
+
+	// spam Set
+	go func() {
+		for {
+			for _, key := range keySet {
+				err := cache.Set(key, rand.Intn(10))
+				if err != nil {
+					t.Error(err.Error())
+				}
+			}
+		}
+	}()
+
+	time.Sleep(1 * time.Second)
+}
+
 func ensureNotInCache(t *testing.T, cache Cache, key string) {
 	val, err := cache.Get(key)
 	requireNoError(t, err)
@@ -68,15 +110,13 @@ func ensureInCache(t *testing.T, cache Cache, key string, val interface{}) {
 }
 
 type staticLoader struct {
-	data map[string]int
+	data *map[string]int
 }
 
 func (loader *staticLoader) Load(key string) (interface{}, error) {
-	if num, exists := loader.data[key]; !exists {
-		println(fmt.Sprintf("nothing to load for [%s]", key))
+	if num, exists := (*loader.data)[key]; !exists {
 		return nil, nil
 	} else {
-		println(fmt.Sprintf("loading key=%s val=%d\n", key, num))
 		return num, nil
 	}
 }

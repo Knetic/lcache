@@ -21,6 +21,7 @@ type Params struct {
 // Cache is an auto-populating LRU cache.
 type Cache interface {
 	Get(string) (interface{}, error)
+	Set(string, interface{}) error
 	RunRefresh() error
 	StopRefresh()
 }
@@ -88,7 +89,8 @@ func (this *cache) Get(key string) (interface{}, error) {
 			return entry.value, entry.refreshError
 		}
 
-		if entry.expiration.After(now) {
+		// if the entry has expired, then it may be refreshed asynchronously
+		if entry.expiration.Before(now) {
 
 			if this.refreshes == nil {
 				// refresh not available, remove.
@@ -124,6 +126,34 @@ func (this *cache) Get(key string) (interface{}, error) {
 
 	this.entries[key] = entry
 	return value, nil
+}
+
+// Set populates the cache with the given key=val pair.
+func (this *cache) Set(key string, val interface{}) error {
+	now := time.Now().UTC()
+	oldEntry, found := this.entries[key]
+	if found {
+		oldEntry.value = val
+		oldEntry.expiration = now.Add(this.Params.ExpireAfterWrite)
+		oldEntry.lastUsed = now
+		oldEntry.refreshing = false
+		oldEntry.refreshError = nil
+		return nil
+	}
+
+	this.entries[key] = &cacheEntry{
+		value:        val,
+		expiration:   now.Add(this.Params.ExpireAfterWrite),
+		lastUsed:     now,
+		refreshing:   false,
+		refreshError: nil,
+	}
+
+	// make sure we never go over the cache size.
+	if uint32(len(this.entries)) >= this.MaximumEntries {
+		this.removeLRU()
+	}
+	return nil
 }
 
 /*
