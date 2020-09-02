@@ -1,36 +1,43 @@
 package lcache
 
 import (
-	"errors"
 	"time"
 )
 
+// Params describes how a Cache is configured.
 type Params struct {
 	Loader Loader
 
-	MaximumEntries uint32
+	MaximumEntries   uint32
 	ExpireAfterWrite time.Duration
-	ExpireAfterRead time.Duration
-	
-	EvictionPoolSize uint32
+	ExpireAfterRead  time.Duration
+
+	EvictionPoolSize   uint32
 	EvictionSampleSize uint32
 
 	GracefulRefresh bool
 }
 
-type Cache struct {
-	
+// Cache is an auto-populating LRU cache.
+type Cache interface {
+	Get(string) (interface{}, error)
+	RunRefresh() error
+	StopRefresh()
+}
+
+// cache implements Cache
+type cache struct {
 	Params
 
-	entries map[string]*cacheEntry
+	entries   map[string]*cacheEntry
 	refreshes chan string
 
-	evictionPool []evictableEntry
+	evictionPool    []evictableEntry
 	evictionPoolTop int
 }
 
-func NewCache(params Params) (*Cache, error) {
-
+// NewCache creates a new auto-populating LRU cache, configured as defined by the given Params.
+func NewCache(params Params) (Cache, error) {
 	var refreshes chan string
 
 	if params.MaximumEntries <= 0 {
@@ -51,20 +58,23 @@ func NewCache(params Params) (*Cache, error) {
 		refreshes = make(chan string, 32)
 	}
 
-	ret := &Cache {
-		Params: params,
-		refreshes: refreshes,
+	ret := &cache{
+		Params:       params,
+		refreshes:    refreshes,
+		entries:      make(map[string]*cacheEntry, params.MaximumEntries),
 		evictionPool: make([]evictableEntry, params.EvictionPoolSize),
 	}
-	
+
 	if params.GracefulRefresh {
-		go RunRefresh(ret)
+		go func() {
+			_ = ret.RunRefresh()
+		}()
 	}
 
 	return ret, nil
 }
 
-func (this *Cache) Get(key string) (interface{}, error) {
+func (this *cache) Get(key string) (interface{}, error) {
 
 	now := time.Now()
 
@@ -79,7 +89,7 @@ func (this *Cache) Get(key string) (interface{}, error) {
 		}
 
 		if entry.expiration.After(now) {
-			
+
 			if this.refreshes == nil {
 				// refresh not available, remove.
 				delete(this.entries, key)
@@ -121,23 +131,33 @@ func (this *Cache) Get(key string) (interface{}, error) {
 	Waits for cache entries to be flagged as expired, and reloads them using the Loader.
 	By default, every Cache starts one of these goroutines for themselves, only call again if you need multiple refreshers (it's safe).
 */
-func RunRefresh(cache *Cache) error {
-	
-	var entry *cacheEntry
-
-	if cache.refreshes == nil {
-		return errors.New("Cache was not created with graceful refresh enabled")
+// RunRefresh refreshes entries flagged as expired, using the Loader, if configured.
+func (this *cache) RunRefresh() error {
+	if this.refreshes == nil {
+		return refreshErrNotEnabled
 	}
 
-	for key := range cache.refreshes {
-		
-		value, err := cache.Get(key)
+	if this.Loader == nil {
+		return refreshErrNoLoader
+	}
+
+	for key := range this.refreshes {
+		// ensure the entry even exists to be refreshed
+		entry, found := this.entries[key]
+		if !found {
+			entry.refreshError = refreshErrEntryNotFound
+			continue
+		}
+
+		// load new value
+		newValue, err := this.Loader.Load(key)
 		if err != nil {
 			entry.refreshError = err
 			continue
 		}
 
-		entry.value = value
+		// set the new value on entry
+		entry.value = newValue
 		entry.refreshing = false
 		entry.refreshError = nil
 	}
@@ -146,6 +166,6 @@ func RunRefresh(cache *Cache) error {
 }
 
 // Stops all refreshing on this cache.
-func (this *Cache) StopRefresh() {
+func (this *cache) StopRefresh() {
 	close(this.refreshes)
 }

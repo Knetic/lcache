@@ -1,12 +1,12 @@
 package lcache
 
 type evictableEntry struct {
-	key string
+	key   string
 	value *cacheEntry
 }
 
 // Removes the least-recently-used entry.
-func (this *Cache) removeLRU() {
+func (this *cache) removeLRU() {
 
 	var oldest evictableEntry
 	var i uint32
@@ -18,8 +18,8 @@ func (this *Cache) removeLRU() {
 	// fortunately, Go maps return unordered tuples when range'd. Even when no changes to maps are made.
 	// this makes random sampling pretty easy.
 	for k, v := range this.entries {
-		sample := evictableEntry {
-			key: k,
+		sample := evictableEntry{
+			key:   k,
 			value: v,
 		}
 
