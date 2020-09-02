@@ -8,8 +8,7 @@ export GOCACHE=$(CURDIR)/.output/cache
 export LCACHE_VERSION
 
 clean:
-	@rm -rf ./.output/
-	@rm -rf ./.temp/
+	@rm -rf .temp .output path src
 
 fmt:
 	@go fmt .
@@ -23,7 +22,7 @@ vendor:
 	@rm -f $(CURDIR)/path/src/lcache
 	@ln -s $(CURDIR) $(CURDIR)/path/src/lcache
 
-	go get -d ./...
+	go get -t -d ./...
 
 	@# Remove submodule git directories
 	@find ./path -mindepth 2 -name ".git" -type d | xargs rm -rf
