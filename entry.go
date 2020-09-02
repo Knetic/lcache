@@ -15,7 +15,7 @@ type cacheEntry struct {
 }
 
 func (this *cacheEntry) updateTimestamps(expireAfter time.Duration) {
-	this.lastUsed = time.Now()
+	this.lastUsed = time.Now().UTC()
 	if expireAfter > 0 {
 		this.expiration = this.lastUsed.Add(expireAfter)
 	}

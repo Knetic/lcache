@@ -76,7 +76,7 @@ func NewCache(params Params) (Cache, error) {
 
 func (this *cache) Get(key string) (interface{}, error) {
 
-	now := time.Now()
+	now := time.Now().UTC()
 
 	// try to find a pre-existing entry
 	entry, exists := this.entries[key]
