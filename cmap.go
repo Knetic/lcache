@@ -34,7 +34,7 @@ type Shard struct {
 func memhash(p unsafe.Pointer, h, s uintptr) uintptr
 
 // NewConcurrentMap creates a new concurrent map
-func NewConcurrentMap(numShards int) ConcurrentMap {
+func NewConcurrentMap(numShards uint32) ConcurrentMap {
 	shards := make([]*Shard, numShards)
 	for i := range shards {
 		shards[i] = &Shard{

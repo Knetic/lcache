@@ -8,12 +8,13 @@ import (
 type Params struct {
 	Loader Loader
 
-	MaximumEntries   uint32
 	ExpireAfterWrite time.Duration
 	ExpireAfterRead  time.Duration
 
+	MaximumEntries     uint32
 	EvictionPoolSize   uint32
 	EvictionSampleSize uint32
+	NumShards          uint32
 
 	GracefulRefresh bool
 }
@@ -55,6 +56,10 @@ func NewCache(params Params) (Cache, error) {
 		params.EvictionPoolSize = params.EvictionSampleSize
 	}
 
+	if params.NumShards < 16 {
+		params.NumShards = 16
+	}
+
 	if params.GracefulRefresh {
 		refreshes = make(chan string, 32)
 	}
@@ -62,7 +67,7 @@ func NewCache(params Params) (Cache, error) {
 	ret := &cache{
 		Params:       params,
 		refreshes:    refreshes,
-		entries:      NewConcurrentMap(512),
+		entries:      NewConcurrentMap(params.NumShards),
 		evictionPool: make([]evictableEntry, params.EvictionPoolSize),
 	}
 

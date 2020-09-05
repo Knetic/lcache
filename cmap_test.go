@@ -19,9 +19,9 @@ const (
 )
 
 func TestConsistentHash(t *testing.T) {
-	shards := 64
+	var shards uint32 = 64
 	iterations := 1000000
-	expectedCount := float64(iterations / shards)
+	expectedCount := float64(iterations) / float64(shards)
 	fuzzPercent := 0.10
 	delta := float64(expectedCount) * fuzzPercent
 	tally := make([]int, shards)
