@@ -16,7 +16,7 @@ var (
 	keySet = []string{key1, key2, key3}
 )
 
-func TestGet(t *testing.T) {
+func TestGetStartWithCacheMiss(t *testing.T) {
 	data := make(map[string]int, 0)
 	params := Params{
 		Loader:             &staticLoader{data: &data},

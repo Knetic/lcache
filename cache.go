@@ -30,7 +30,8 @@ type Cache interface {
 type cache struct {
 	Params
 
-	entries   map[string]*cacheEntry
+	//entries   map[string]*cacheEntry
+	entries   ConcurrentMap
 	refreshes chan string
 
 	evictionPool    []evictableEntry
@@ -62,7 +63,7 @@ func NewCache(params Params) (Cache, error) {
 	ret := &cache{
 		Params:       params,
 		refreshes:    refreshes,
-		entries:      make(map[string]*cacheEntry, params.MaximumEntries),
+		entries:      NewConcurrentMap(512),
 		evictionPool: make([]evictableEntry, params.EvictionPoolSize),
 	}
 
@@ -80,12 +81,12 @@ func (this *cache) Get(key string) (interface{}, error) {
 	now := time.Now().UTC()
 
 	// try to find a pre-existing entry
-	entry, exists := this.entries[key]
+	entry, exists := this.entries.Get(key)
 	if exists {
 
 		// if we had an error last time refreshing, hand it back here, and delete the entry.
 		if entry.refreshError != nil {
-			delete(this.entries, key)
+			this.entries.Del(key)
 			return entry.value, entry.refreshError
 		}
 
@@ -94,7 +95,7 @@ func (this *cache) Get(key string) (interface{}, error) {
 
 			if this.refreshes == nil {
 				// refresh not available, remove.
-				delete(this.entries, key)
+				this.entries.Del(key)
 			} else {
 				// if it's not already refreshing, queue it for refresh and prevent further queueing.
 				if !entry.refreshing {
@@ -120,19 +121,19 @@ func (this *cache) Get(key string) (interface{}, error) {
 	entry.updateTimestamps(this.ExpireAfterWrite)
 
 	// make sure we never go over the cache size.
-	if uint32(len(this.entries)) >= this.MaximumEntries {
+	if uint32(this.entries.Len()) >= this.MaximumEntries {
 		this.removeLRU()
 	}
 
-	this.entries[key] = entry
+	this.entries.Set(key, entry)
 	return value, nil
 }
 
 // Set populates the cache with the given key=val pair.
 func (this *cache) Set(key string, val interface{}) error {
 	now := time.Now().UTC()
-	oldEntry, found := this.entries[key]
-	if found {
+	oldEntry, found := this.entries.Get(key)
+	if found && oldEntry != nil {
 		oldEntry.value = val
 		oldEntry.expiration = now.Add(this.Params.ExpireAfterWrite)
 		oldEntry.lastUsed = now
@@ -141,16 +142,16 @@ func (this *cache) Set(key string, val interface{}) error {
 		return nil
 	}
 
-	this.entries[key] = &cacheEntry{
+	this.entries.Set(key, &cacheEntry{
 		value:        val,
 		expiration:   now.Add(this.Params.ExpireAfterWrite),
 		lastUsed:     now,
 		refreshing:   false,
 		refreshError: nil,
-	}
+	})
 
 	// make sure we never go over the cache size.
-	if uint32(len(this.entries)) >= this.MaximumEntries {
+	if uint32(this.entries.Len()) >= this.MaximumEntries {
 		this.removeLRU()
 	}
 	return nil
@@ -173,7 +174,7 @@ func (this *cache) RunRefresh() error {
 
 	for key := range this.refreshes {
 		// ensure the entry even exists to be refreshed
-		entry, found := this.entries[key]
+		entry, found := this.entries.Get(key)
 		if !found {
 			entry.refreshError = refreshErrEntryNotFound
 			continue
