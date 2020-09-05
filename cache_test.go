@@ -2,6 +2,7 @@ package lcache
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
 	"runtime/debug"
 	"testing"
@@ -41,18 +42,15 @@ func TestGet(t *testing.T) {
 	ensureNotInCache(t, cache, key2)
 	ensureNotInCache(t, cache, key3)
 
-	// sleep both durations to not care about tie-breakers: we just want the entry expired
-	time.Sleep(params.ExpireAfterRead)
-	time.Sleep(params.ExpireAfterWrite)
-
 	// value is refreshed (eventually)
-	ensureInCache(t, cache, key1, 1)
+	timeout := 2 * params.ExpireAfterRead
+	ensureInCache(t, cache, key1, 1, timeout)
 	ensureNotInCache(t, cache, key2)
 	ensureNotInCache(t, cache, key3)
 
 	// value is cached and does not need loader before expiry
 	delete(data, key1)
-	ensureInCache(t, cache, key1, 1)
+	ensureInCache(t, cache, key1, 1, timeout)
 	ensureNotInCache(t, cache, key2)
 	ensureNotInCache(t, cache, key3)
 }
@@ -103,7 +101,26 @@ func ensureNotInCache(t *testing.T, cache Cache, key string) {
 	requireEqual(t, nil, val)
 }
 
-func ensureInCache(t *testing.T, cache Cache, key string, val interface{}) {
+func ensureInCache(t *testing.T, cache Cache, key string, val interface{}, timeout time.Duration) {
+	// if timeout == 0, don't deal with eventual consistency and just fetch from cache
+	if timeout > 0 {
+		past := time.Now()
+		for {
+			val, err := cache.Get(key1)
+			if err != nil {
+				log.Fatal("error fetching", err)
+			}
+			if val == 1 {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		elapsed := time.Now().Sub(past)
+		if elapsed > timeout {
+			log.Fatal(fmt.Sprintf("eky was refreshed in %v but ExpireAfterRead=%v", elapsed, timeout))
+		}
+	}
+
 	actual, err := cache.Get(key)
 	requireNoError(t, err)
 	requireEqual(t, actual, val, "unexpected cached value")
