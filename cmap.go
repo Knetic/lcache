@@ -33,7 +33,7 @@ type Shard struct {
 //go:linkname memhash runtime.memhash
 func memhash(p unsafe.Pointer, h, s uintptr) uintptr
 
-// NewConcurrentMap creates a new concurrent map
+// NewConcurrentMap creates a new concurrent map.
 func NewConcurrentMap(numShards uint32) ConcurrentMap {
 	shards := make([]*Shard, numShards)
 	for i := range shards {
@@ -50,12 +50,6 @@ func NewConcurrentMap(numShards uint32) ConcurrentMap {
 // Shard gets the shard for the given key.
 func (m *cmap) Shard(key string) *Shard {
 	return m.Shards[m.hash(key)]
-}
-
-func (m *cmap) hash(key string) int {
-	hash := uint(memhash(unsafe.Pointer(&key), 0, uintptr(len(key))))
-	// return int(hash % uint64(len(m.Shards)))
-	return jumphash(hash, len(m.Shards))
 }
 
 // Get retrieves the value associated with the key, if it exists.
@@ -86,7 +80,7 @@ func (m *cmap) Del(key string) {
 	shard.lock.Unlock()
 }
 
-// Len returns the length of the concurrent map. TODO: make this constnat-time
+// Len returns the length of the concurrent map. TODO: make this constnat-time.
 func (m *cmap) Len() int {
 	val := 0
 	for _, shard := range m.Shards {
@@ -95,6 +89,7 @@ func (m *cmap) Len() int {
 	return val
 }
 
+// All returns a channel that sends all key-val pairs in the map.
 func (m *cmap) All() chan *KeyVal {
 	iter := make(chan *KeyVal)
 	go func() {
@@ -108,12 +103,19 @@ func (m *cmap) All() chan *KeyVal {
 	return iter
 }
 
+// uses memhash for fast hash (not consistent across processes)
+// and jumphash for finding shard index
+func (m *cmap) hash(key string) int {
+	hash := uint(memhash(unsafe.Pointer(&key), 0, uintptr(len(key))))
+	return jumphash(hash, len(m.Shards))
+}
+
 // ported from https://github.com/ceejbot/jumphash/blob/master/jump.cc#L6-L17
-func jumphash(key uint, buckets int) int {
+func jumphash(key uint, shards int) int {
 	var b, j int
 	b = -1
 	j = 0
-	for j < buckets {
+	for j < shards {
 		b = j
 		key = key*2862933555777941757 + 1
 		j = (b + 1) * (1 << 31) / int(((key >> 33) + 1))
