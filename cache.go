@@ -30,7 +30,6 @@ type Cache interface {
 type cache struct {
 	Params
 
-	//entries   map[string]*cacheEntry
 	entries   ConcurrentMap
 	refreshes chan string
 
