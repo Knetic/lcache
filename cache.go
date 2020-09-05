@@ -114,23 +114,28 @@ func (this *cache) Get(key string) (interface{}, error) {
 	}
 
 	// not found in cache, load.
-	value, err := this.Loader.Load(key)
-	if err != nil {
-		// error during loading, hand it back.
-		return 0, err
+	if this.Loader != nil {
+		value, err := this.Loader.Load(key)
+		if err != nil {
+			// error during loading, hand it back.
+			return 0, err
+		}
+
+		// insert.
+		entry = &cacheEntry{value: value}
+		entry.updateTimestamps(this.ExpireAfterWrite)
+
+		// make sure we never go over the cache size.
+		if uint32(this.entries.Len()) >= this.MaximumEntries {
+			this.removeLRU()
+		}
+
+		this.entries.Set(key, entry)
+		return value, nil
 	}
 
-	// insert.
-	entry = &cacheEntry{value: value}
-	entry.updateTimestamps(this.ExpireAfterWrite)
-
-	// make sure we never go over the cache size.
-	if uint32(this.entries.Len()) >= this.MaximumEntries {
-		this.removeLRU()
-	}
-
-	this.entries.Set(key, entry)
-	return value, nil
+	// not in cache & no loader
+	return nil, nil
 }
 
 // Set populates the cache with the given key=val pair.
