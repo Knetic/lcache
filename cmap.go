@@ -25,7 +25,6 @@ type cmap struct {
 	Shards      []*Shard
 	CountChange chan int
 	Count       int
-	CountLock   sync.RWMutex
 }
 
 // Shard represents a submap with a shared lock
@@ -107,8 +106,6 @@ func (m *cmap) Del(key string) (*cacheEntry, bool) {
 
 // Len returns the length of the concurrent map. TODO: make this constnat-time.
 func (m *cmap) Len() int {
-	m.CountLock.RLock()
-	defer m.CountLock.RUnlock()
 	return m.Count
 }
 
@@ -141,9 +138,7 @@ func (m *cmap) All() chan *KeyVal {
 // This makes cmap.Count eventually consistent (when the channel has been drained).
 func (m *cmap) updateCount() {
 	for delta := range m.CountChange {
-		m.CountLock.Lock()
 		m.Count += delta
-		m.CountLock.Unlock()
 	}
 }
 
