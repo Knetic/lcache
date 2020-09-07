@@ -17,10 +17,10 @@ func (this *cache) removeLRU() {
 	// we can't actually sample the set of keys at random, but we can iterate and randomly add entries.
 	// fortunately, Go maps return unordered tuples when range'd. Even when no changes to maps are made.
 	// this makes random sampling pretty easy.
-	for k, v := range this.entries {
+	for kv := range this.entries.All() {
 		sample := evictableEntry{
-			key:   k,
-			value: v,
+			key:   kv.Key,
+			value: kv.Val,
 		}
 
 		// add sample to pool.
@@ -31,6 +31,9 @@ func (this *cache) removeLRU() {
 
 			// pool's full. Find the oldest entry, replace. Otherwise discard.
 			for z, entry := range this.evictionPool {
+				if entry.value == nil || sample.value == nil {
+					continue
+				}
 				if entry.value.lastUsed.After(sample.value.lastUsed) {
 					this.evictionPool[z] = sample
 					break
@@ -48,6 +51,9 @@ func (this *cache) removeLRU() {
 
 	// find oldest entry in pool
 	for z, entry := range this.evictionPool {
+		if entry.value == nil || oldest.value == nil {
+			continue
+		}
 		if entry.value.lastUsed.Before(oldest.value.lastUsed) {
 			oldest = entry
 			removableIdx = z
@@ -59,5 +65,5 @@ func (this *cache) removeLRU() {
 	this.evictionPoolTop--
 
 	// delete from cache
-	delete(this.entries, oldest.key)
+	this.entries.Del(oldest.key)
 }
