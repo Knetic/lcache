@@ -3,18 +3,40 @@ package lcache
 import (
 	"fmt"
 	"log"
-	"math/rand"
 	"runtime/debug"
 	"testing"
 	"time"
 )
 
 var (
-	key1   = "key1"
-	key2   = "key2"
-	key3   = "key3"
+	key1   = RandomString(64)
+	key2   = RandomString(32)
+	key3   = RandomString(16)
 	keySet = []string{key1, key2, key3}
 )
+
+func TestSimple(t *testing.T) {
+	data := make(map[string]int, len(keySet))
+	params := Params{
+		Loader:             &staticLoader{data: &data},
+		MaximumEntries:     10,
+		ExpireAfterWrite:   1 * time.Hour,
+		ExpireAfterRead:    1 * time.Hour,
+		EvictionPoolSize:   32,
+		EvictionSampleSize: 32,
+		GracefulRefresh:    false, // rule out refresh goroutine
+	}
+	cache, _ := NewCache(params)
+	key := RandomString(50)
+	cache.Set(key, key)
+	val, err := cache.Get(key)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if val != key {
+		log.Fatal(fmt.Sprintf("expected=%s actual=%s", key, val))
+	}
+}
 
 func TestGetStartWithCacheMiss(t *testing.T) {
 	data := make(map[string]int, 0)
@@ -44,12 +66,6 @@ func TestGetStartWithCacheMiss(t *testing.T) {
 
 	// value is refreshed (eventually)
 	timeout := 2 * params.ExpireAfterRead
-	ensureInCache(t, cache, key1, 1, timeout)
-	ensureNotInCache(t, cache, key2)
-	ensureNotInCache(t, cache, key3)
-
-	// value is cached and does not need loader before expiry
-	delete(data, key1)
 	ensureInCache(t, cache, key1, 1, timeout)
 	ensureNotInCache(t, cache, key2)
 	ensureNotInCache(t, cache, key3)
@@ -84,7 +100,7 @@ func TestGetSetRaceCondition(t *testing.T) {
 	go func() {
 		for {
 			for _, key := range keySet {
-				err := cache.Set(key, rand.Intn(10))
+				err := cache.Set(key, key)
 				if err != nil {
 					t.Error(err.Error())
 				}

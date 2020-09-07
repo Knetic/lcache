@@ -184,6 +184,9 @@ func (this *cache) RunRefresh() error {
 	for key := range this.refreshes {
 		// ensure the entry even exists to be refreshed
 		entry, found := this.entries.Get(key)
+		if entry == nil {
+			continue
+		}
 		if !found {
 			entry.refreshError = refreshErrEntryNotFound
 			continue

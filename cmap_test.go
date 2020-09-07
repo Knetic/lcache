@@ -20,7 +20,7 @@ const (
 
 func TestConsistentHash(t *testing.T) {
 	var shards uint32 = 64
-	iterations := 1000000
+	iterations := 100000
 	expectedCount := float64(iterations) / float64(shards)
 	fuzzPercent := 0.10
 	delta := float64(expectedCount) * fuzzPercent
@@ -29,7 +29,7 @@ func TestConsistentHash(t *testing.T) {
 
 	for i := 0; i < iterations; i++ {
 		// use static key length to rule out non-uniform distribution of key lengths which might affect hash distribution
-		key := RandStringBytesMaskImprSrcUnsafe(32)
+		key := RandomString(32)
 		hash := (m.(*cmap)).hash(key)
 		tally[hash]++
 	}
@@ -47,8 +47,38 @@ func TestConsistentHash(t *testing.T) {
 	}
 }
 
+func TestLen(t *testing.T) {
+	iterations := 10
+	m := NewConcurrentMap(64)
+	for i := 0; i < iterations; i++ {
+		key := RandomString(100)
+		if _, exists := m.Set(key, nil); exists {
+			// try again if the key already exists
+			i--
+		}
+	}
+	time.Sleep(100 * time.Millisecond)
+	if m.Len() != 10 {
+		t.Error(fmt.Sprintf("unexpected length: expected=%d actual=%d", iterations, m.Len()))
+	}
+	count := 0
+	for kv := range m.All() {
+		_, exists := m.Del(kv.Key)
+		if !exists {
+			t.Error("expected key to exist but did not:", kv.Key)
+		}
+		count++
+	}
+	time.Sleep(100 * time.Millisecond)
+	if m.Len() != 0 {
+		t.Error(fmt.Sprintf("unexpected length: expected=%d actual=%d", 0, m.Len()))
+	}
+	println("m.Len():", m.Len())
+	println("TestLen(): count:", count)
+}
+
 // stolen from https://stackoverflow.com/a/31832326
-func RandStringBytesMaskImprSrcUnsafe(n int) string {
+func RandomString(n int) string {
 	b := make([]byte, n)
 	// A src.Int63() generates 63 random bits, enough for letterIdxMax characters!
 	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
